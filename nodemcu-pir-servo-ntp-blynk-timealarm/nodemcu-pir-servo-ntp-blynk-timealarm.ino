@@ -3,7 +3,7 @@
  * Blynk library is licensed under MIT license
  * This example code is in public domain.
  * 
- * Developed by Marcelo Rovai - 30 November 2016
+ * Developed by Marcelo Rovai - 30 November r
  **************************************************************/
 #include <ESP8266WiFi.h>
 #include <TimeAlarms.h>
@@ -11,22 +11,26 @@
 #include <WiFiUdp.h>
 #include <Servo.h>
 #include <BlynkSimpleEsp8266.h>
+#include "FS.h"
+//#include <time.h>
+
+WidgetTerminal terminal(V1);
 
 #define BLYNK_PRINT Serial    // Comment this out to disable prints and save space
 
 Servo myservo; //Criando o objeto servo para controlar o servomotor
-
+char filename[] = "f.txt";
 char auth[] = "5312c01e8f224750b99c951d68a307c3";
 
 /* WiFi credentials */
-char ssid[] = "iPhone Cleiton";
-char pass[] = "0123498765";
+char ssid[] = "GVT-FIONA";
+char pass[] = "J531128550";
 
 /* HC-SR501 Motion Detector */
-#define ledPin D7 
+#define ledPin D7
 #define pirPin D1 // Input for HC-S501
 int pirValue; // Place to store read PIR Value
-
+int countDetection;
 /*----- novo codigo -----*/
 // NTP Servers:
 static const char ntpServerName[] = "0.br.pool.ntp.org";
@@ -47,15 +51,39 @@ void sendNTPpacket(IPAddress &address);
  **************************************************/
 void getPirValue(void)
 {
+  
   pirValue = digitalRead(pirPin);
+  digitalWrite(ledPin, pirValue); 
   if (pirValue) 
-  { 
-    Serial.println("==> Motion detected");
-    Blynk.notify("PET DETECTADO!!");  
-  }
-  digitalWrite(ledPin, pirValue);
-}
-
+  {    
+    countDetection++;
+    //time_t t = now();
+    time_t t = now();
+    File myDataFile = SPIFFS.open(filename, "w+");
+    //myDataFile.println("Dados lidos do LOG");
+    myDataFile.print("Moviment detectado em: ");
+    myDataFile.print(hour(t));
+    myDataFile.print(":");
+    myDataFile.println(minute(t));  
+    myDataFile.close();
+  
+    myDataFile = SPIFFS.open(filename, "r");
+   
+    while(myDataFile.available()) {
+      Serial.write(myDataFile.read());
+      
+      terminal.println(countDetection);
+      }
+         
+    myDataFile.close(); 
+    digitalWrite(ledPin, pirValue); 
+    //Seria digitalWrite(ledPin, pirValue); l.println("==> Motion detected");
+    Blynk.notify("DETECTION");  
+    
+   }
+   
+ }
+ 
 void actServo(void)
 {
  Serial.println("Servo acionado com sucesso!");
@@ -71,10 +99,8 @@ void actServo(void)
     myservo.write(pos);              // tell servo to go to position in variable 'pos' 
     delay(15);                       // waits 15ms for the servo to reach the position 
   } 
-
   
 }
-
 
 /* --- fim do novo codigo --- */
 
@@ -101,11 +127,10 @@ void printDigits(int digits)
     Serial.print('0');
   Serial.print(digits);
 }
-
 /*-------- NTP code ----------*/
 
 const int NTP_PACKET_SIZE = 48; // NTP time is in the first 48 bytes of message
-byte packetBuffer[NTP_PACKET_SIZE]; //buffer to hold incoming & outgoing packets
+byte packetBuffer[NTP_PACKET_SIZE]; //buffer tdigitalWrite(ledPin, pirValue); o hold incoming & outgoing packets
 
 time_t getNtpTime()
 {
@@ -164,9 +189,11 @@ void sendNTPpacket(IPAddress &address)
 void setup()
 {
 
-  //setTime(0,13,0,1,1,11); // set time to Saturday 8:29:00am Jan 1 2011
+  SPIFFS.begin(); // inicializando sistema de arquivos
   
   myservo.attach(2);  // attaches the servo on GIO2 to the servo object 
+
+  countDetection = 0;
   
   Serial.begin(9600);
   delay(100);
@@ -189,17 +216,16 @@ void setup()
   Serial.println("waiting for sync");
   while (timeStatus() == timeNotSet);
   Serial.println("time sync ok!");
-  //Alarm.alarmRepeat(hour(),minute(),second()+5,actServo);
-  Alarm.timerRepeat(20,actServo);
-
+  //Alarm.alarmRepeat(hour(),minute(),second()+5,actServo)  
+  Alarm.timerRepeat(10,actServo);
 }
 
 
 void loop()
 {
-  
   Blynk.run();
-  Alarm.delay(100);
+  Alarm.delay(200);
   getPirValue();
+  
 }
 
