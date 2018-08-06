@@ -12,9 +12,11 @@
 #include <Servo.h>
 #include <BlynkSimpleEsp8266.h>
 #include "FS.h"
-//#include <time.h>
+#include <SPI.h>
 
 WidgetTerminal terminal(V1);
+WidgetLCD lcd(V3);
+
 
 #define BLYNK_PRINT Serial    // Comment this out to disable prints and save space
 
@@ -31,6 +33,10 @@ char pass[] = "J531128550";
 #define pirPin D1 // Input for HC-S501
 int pirValue; // Place to store read PIR Value
 int countDetection;
+long rssi;
+int alimento;
+
+
 /*----- novo codigo -----*/
 // NTP Servers:
 static const char ntpServerName[] = "0.br.pool.ntp.org";
@@ -57,6 +63,7 @@ void getPirValue(void)
   if (pirValue) 
   {    
     countDetection++;
+      
     //time_t t = now();
     time_t t = now();
     File myDataFile = SPIFFS.open(filename, "w+");
@@ -86,6 +93,11 @@ void getPirValue(void)
  
 void actServo(void)
 {
+ alimento -=10;
+ Blynk.virtualWrite(V0, alimento);
+ if (alimento == 0) {
+   Blynk.virtualWrite(V0, "Reabastecer!!!");
+  }
  Serial.println("Servo acionado com sucesso!");
  int pos;
 
@@ -186,6 +198,38 @@ void sendNTPpacket(IPAddress &address)
   Udp.endPacket();
 }
 
+
+BLYNK_WRITE(V4) //Button Widget is writing to pin V1
+  {
+  int pinData = param.asInt(); 
+  if(pinData==1)
+  {
+    lcd.clear();
+    lcd.print(0 ,0,"Wifi Strength");                  // This fn displays the Wifi strength when a button is pressed from the Blynk App
+    lcd.print(0 ,1,rssi);
+  }else
+  {
+    lcd.clear();
+  }
+  
+  }
+BLYNK_WRITE(V5) //Button Widget is writing to pin V1
+{
+  int pinData = param.asInt(); 
+  if(pinData==1)
+  {
+    lcd.clear();
+    lcd.print(0 ,0,"Detecções");                 // This fn displays the IP Address when a button is pressed from the Blynk App
+    lcd.print(0 ,1,countDetection);
+   
+  }else
+  {
+    lcd.clear();
+  }
+  
+}
+
+
 void setup()
 {
 
@@ -194,6 +238,8 @@ void setup()
   myservo.attach(2);  // attaches the servo on GIO2 to the servo object 
 
   countDetection = 0;
+
+  alimento = 100;
   
   Serial.begin(9600);
   delay(100);
@@ -201,6 +247,7 @@ void setup()
   pinMode(ledPin, OUTPUT);
   pinMode(pirPin, INPUT);
   digitalWrite(ledPin, LOW);
+  Blynk.setProperty(V0, "label", "Alimento");
 
 /*----- novo codigo -----*/
   Serial.println("TimeNTP Example");
@@ -210,7 +257,6 @@ void setup()
   Udp.begin(localPort);
   Serial.print("Local port: ");
   Serial.println(Udp.localPort());
-  
   setSyncProvider(getNtpTime);
   setSyncInterval(300);
   Serial.println("waiting for sync");
@@ -218,14 +264,20 @@ void setup()
   Serial.println("time sync ok!");
   //Alarm.alarmRepeat(hour(),minute(),second()+5,actServo)  
   Alarm.timerRepeat(10,actServo);
+  delay(1000);
 }
 
 
 void loop()
 {
+  
   Blynk.run();
   Alarm.delay(200);
   getPirValue();
+  rssi=WiFi.RSSI();                                        // Functions to display RSSI and Ip address
+  Serial.println(rssi);
+  delay(500);
   
+
 }
 
