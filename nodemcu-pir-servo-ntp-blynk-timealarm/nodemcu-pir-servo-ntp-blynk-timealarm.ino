@@ -24,18 +24,21 @@ Servo myservo; //Criando o objeto servo para controlar o servomotor
 char filename[] = "f.txt";
 char auth[] = "5312c01e8f224750b99c951d68a307c3";
 
+bool lastPirState = false;
+bool curPirState = false;
+
 /* WiFi credentials */
 char ssid[] = "GVT-FIONA";
 char pass[] = "J531128550";
 
 /* HC-SR501 Motion Detector */
 #define ledPin D7
-#define pirPin D1 // Input for HC-S501
-int pirValue; // Place to store read PIR Value
-int countDetection;
-long rssi;
-int alimento;
+#define pirPin D1 // 180Input for HC-S501
 
+int countDetection;
+//long rssi;
+int alimento;
+int qtd_alimento;
 
 /*----- novo codigo -----*/
 // NTP Servers:
@@ -58,80 +61,67 @@ void sendNTPpacket(IPAddress &address);
 void getPirValue(void)
 {
   
-  pirValue = digitalRead(pirPin);
-  digitalWrite(ledPin, pirValue); 
-  if (pirValue) 
-  {    
-    countDetection++;
-      
-    //time_t t = now();
-    time_t t = now();
-    File myDataFile = SPIFFS.open(filename, "w+");
-    //myDataFile.println("Dados lidos do LOG");
-    myDataFile.print("Moviment detectado em: ");
-    myDataFile.print(hour(t));
-    myDataFile.print(":");
-    myDataFile.println(minute(t));  
-    myDataFile.close();
+  curPirState = digitalRead(pirPin);
+  //digitalWrite(ledPin, pirValue); 
   
-    myDataFile = SPIFFS.open(filename, "r");
-   
-    while(myDataFile.available()) {
-      Serial.write(myDataFile.read());
-      
-      terminal.println(countDetection);
-      }
-         
-    myDataFile.close(); 
-    digitalWrite(ledPin, pirValue); 
-    //Seria digitalWrite(ledPin, pirValue); l.println("==> Motion detected");
-    Blynk.notify("DETECTION");  
+  if (curPirState != lastPirState) {
     
-   }
-   
+
+    lastPirState = curPirState;
+    if (curPirState == true) {
+        countDetection++;
+        time_t t = now();
+        File myDataFile = SPIFFS.open(filename, "w+");
+        //myDataFile.println("Dados lidos do LOG");
+        myDataFile.print("Moviment detectado em: ");
+        myDataFile.print(hour(t));
+        myDataFile.print(":");
+        myDataFile.println(minute(t));  
+        myDataFile.close();
+  
+        myDataFile = SPIFFS.open(filename, "r");
+       
+        while(myDataFile.available()) {
+          Serial.write(myDataFile.read());
+          
+          terminal.println(countDetection);
+        }
+         
+          myDataFile.close(); 
+         
+          //Seria digitalWrite(ledPin, pirValue); l.println("==> Motion detected");
+          Blynk.notify("DETECTION"); 
+      }
+    }        
  }
  
 void actServo(void)
 {
- alimento -=10;
+ 
  Blynk.virtualWrite(V0, alimento);
- if (alimento == 0) {
-   Blynk.virtualWrite(V0, "Reabastecer!!!");
-  }
+ 
  Serial.println("Servo acionado com sucesso!");
- int pos;
-
-  for(pos = 0; pos <= 180; pos += 1) // goes from 0 degrees to 180 degrees 
-  {                                  // in steps of 1 degree 
+ if (alimento > 0) {
+   Serial.println("Servo acionado com sucesso!");
+   int pos;
+   for(pos = 0; pos <= 45; pos += 1) // goes from 0 degrees to 45 degrees 
+   {                                  // in steps of 1 degree 
     myservo.write(pos);              // tell servo to go to position in variable 'pos' 
     delay(15);                       // waits 15ms for the servo to reach the position 
-  } 
-  for(pos = 180; pos>=0; pos-=1)     // goes from 180 degrees to 0 degrees 
-  {                                
+   } 
+   for(pos = 45; pos>=0; pos-=1)     // goes from 45 degrees to 0 degrees 
+   {                                
     myservo.write(pos);              // tell servo to go to position in variable 'pos' 
     delay(15);                       // waits 15ms for the servo to reach the position 
-  } 
-  
-}
-
-/* --- fim do novo codigo --- */
-
-void digitalClockDisplay()
-{
-  // digital clock display of the time
-  Serial.print(hour());
-  printDigits(minute());
-  printDigits(second());
-  Serial.print(" ");
-  Serial.print(day());
-  Serial.print(".");
-  Serial.print(month());
-  Serial.print(".");
-  Serial.print(year());
-  Serial.println();
+   }
+   alimento -= 20; 
+  } else {
+    Blynk.virtualWrite(V0, 0);
+    }
 }
 
 void printDigits(int digits)
+
 {
   // utility for digital clock display: prints preceding colon and leading 0
   Serial.print(":");
@@ -198,22 +188,7 @@ void sendNTPpacket(IPAddress &address)
   Udp.endPacket();
 }
 
-
-BLYNK_WRITE(V4) //Button Widget is writing to pin V1
-  {
-  int pinData = param.asInt(); 
-  if(pinData==1)
-  {
-    lcd.clear();
-    lcd.print(0 ,0,"Wifi Strength");                  // This fn displays the Wifi strength when a button is pressed from the Blynk App
-    lcd.print(0 ,1,rssi);
-  }else
-  {
-    lcd.clear();
-  }
-  
-  }
-BLYNK_WRITE(V5) //Button Widget is writing to pin V1
+BLYNK_WRITE(V5) //Button Widget is writing to pin V5
 {
   int pinData = param.asInt(); 
   if(pinData==1)
@@ -230,6 +205,7 @@ BLYNK_WRITE(V5) //Button Widget is writing to pin V1
 }
 
 
+
 void setup()
 {
 
@@ -239,14 +215,14 @@ void setup()
 
   countDetection = 0;
 
-  alimento = 100;
+  alimento = 200;
   
   Serial.begin(9600);
   delay(100);
   Blynk.begin(auth, ssid, pass);
   pinMode(ledPin, OUTPUT);
   pinMode(pirPin, INPUT);
-  digitalWrite(ledPin, LOW);
+  digitalWrite(ledPin, HIGH);
   Blynk.setProperty(V0, "label", "Alimento");
 
 /*----- novo codigo -----*/
@@ -261,8 +237,7 @@ void setup()
   setSyncInterval(300);
   Serial.println("waiting for sync");
   while (timeStatus() == timeNotSet);
-  Serial.println("time sync ok!");
-  //Alarm.alarmRepeat(hour(),minute(),second()+5,actServo)  
+  Serial.println("time sync ok!");  
   Alarm.timerRepeat(10,actServo);
   delay(1000);
 }
@@ -274,9 +249,9 @@ void loop()
   Blynk.run();
   Alarm.delay(200);
   getPirValue();
-  rssi=WiFi.RSSI();                                        // Functions to display RSSI and Ip address
-  Serial.println(rssi);
-  delay(500);
+  //rssi=WiFi.RSSI();                                        // Functions to display RSSI and Ip address
+ // Serial.println(rssi);
+  //delay(500);
   
 
 }
